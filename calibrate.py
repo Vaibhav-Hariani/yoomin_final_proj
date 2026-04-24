@@ -2,20 +2,21 @@
 """Calibration script: generate a distinct pattern per block, save image,
 and write it to LEDs via write_frame.
 
-Usage:
-  python3 calibrate.py --order 0,1,2,...,11 --orient 0,0,180,...
+Hard-coded 5x2 LED block matrix with wiring:
+  Column 0: Blocks 0-4 (top to bottom)
+  Column 1: Blocks 5-9 (bottom to top, i.e., reverse wiring)
 """
-import argparse
 import numpy as np
 import cv2
 from mapping import build_mapping
 from writer import write_frame
 
 
+# Hard-coded 5x2 block LED matrix
 BLOCK_HEIGHT = 8
 BLOCK_WIDTH = 32
-BLOCK_ROWS = 4
-BLOCK_COLS = 3
+BLOCK_ROWS = 5
+BLOCK_COLS = 2
 Y_LEDS = BLOCK_ROWS * BLOCK_HEIGHT
 X_LEDS = BLOCK_COLS * BLOCK_WIDTH
 
@@ -57,51 +58,67 @@ def make_block_pattern(block_id):
     return block
 
 
-def build_calibration_image(order, orient):
+def build_calibration_image():
+    """Build a 5x2 block calibration image with distinct colors per block.
+    
+    Wiring order:
+      Column 0: Blocks 0-4 (top to bottom)
+      Column 1: Blocks 5-9 (bottom to top, reversed)
+    """
     frame = np.zeros((Y_LEDS, X_LEDS, 3), dtype=np.uint8)
-    # For each block id (position), draw its pattern so we can visually confirm
-    for block_id in range(BLOCK_ROWS * BLOCK_COLS):
-        br = block_id // BLOCK_COLS
-        bc = block_id % BLOCK_COLS
-        r0 = br * BLOCK_HEIGHT
-        c0 = bc * BLOCK_WIDTH
+    
+    # Column 0: Blocks 0-4 (top to bottom)
+    for row in range(BLOCK_ROWS):
+        block_id = row
+        r0 = row * BLOCK_HEIGHT
+        c0 = 0
         pattern = make_block_pattern(block_id)
         frame[r0:r0 + BLOCK_HEIGHT, c0:c0 + BLOCK_WIDTH] = pattern
-
+    
+    # Column 1: Blocks 5-9 (bottom to top, i.e., reverse wiring)
+    for row in range(BLOCK_ROWS):
+        block_id = 9 - row  # Column 1: Block 9, 8, 7, 6, 5 (top to bottom in physical layout)
+        r0 = row * BLOCK_HEIGHT
+        c0 = BLOCK_WIDTH
+        pattern = make_block_pattern(block_id)
+        frame[r0:r0 + BLOCK_HEIGHT, c0:c0 + BLOCK_WIDTH] = pattern
+    
     return frame
 
 
-def parse_list_arg(s, length, name):
-    if s is None:
-        return None
-    parts = [p.strip() for p in s.split(',') if p.strip() != '']
-    vals = [int(x) for x in parts]
-    if len(vals) != length:
-        raise argparse.ArgumentTypeError(f"{name} must have {length} comma-separated integers")
-    return vals
+def get_wiring_order():
+    """Return the wiring order for the 5x2 block matrix.
+    
+    Maps physical position to block index:
+      Column 0: Block 0, 1, 2, 3, 4 (top to bottom)
+      Column 1: Block 9, 8, 7, 6, 5 (top to bottom in layout, but reverse wiring)
+    """
+    order = []
+    # Column 0: top to bottom (blocks 0-4)
+    for row in range(BLOCK_ROWS):
+        order.append(row)
+    # Column 1: bottom to top (blocks 9,8,7,6,5)
+    for row in range(BLOCK_ROWS):
+        order.append(9 - row)
+    return order
+
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--order', help='Comma-separated wiring order (12 ints)')
-    parser.add_argument('--orient', help='Comma-separated orientations (12 ints 0 or 180)')
-    parser.add_argument('--out', help='Output image filename', default='calibration.png')
-    args = parser.parse_args()
-
-    default_order = list(range(BLOCK_ROWS * BLOCK_COLS))
-    default_orient = [0] * (BLOCK_ROWS * BLOCK_HEIGHT // BLOCK_HEIGHT * BLOCK_COLS)
-
-    order = parse_list_arg(args.order, BLOCK_ROWS * BLOCK_COLS, 'order') or default_order
-    orient = parse_list_arg(args.orient, BLOCK_ROWS * BLOCK_COLS, 'orient') or [0] * (BLOCK_ROWS * BLOCK_COLS)
-
+    """Run calibration with hard-coded 5x2 block structure."""
+    # Hard-coded wiring order for 5x2 block matrix
+    order = get_wiring_order()
+    orient = [0] * (BLOCK_ROWS * BLOCK_COLS)
+    
     # Build the image that labels/marks each block position
-    img = build_calibration_image(order, orient)
+    img = build_calibration_image()
 
     # Save a visualization (convert RGB -> BGR for OpenCV)
-    cv2.imwrite(args.out, img[:, :, ::-1])
-    print(f"Saved calibration image to {args.out}")
+    out_filename = 'calibration.png'
+    cv2.imwrite(out_filename, img[:, :, ::-1])
+    print(f"Saved calibration image to {out_filename}")
 
-    # Build mapping using provided wiring order and orientations
+    # Build mapping using hard-coded wiring order and orientations
     mapping = build_mapping(order, orient)
 
     # Use writer.write_frame to output to LEDs (or mock)
