@@ -3,8 +3,8 @@
 and write it to LEDs via write_frame.
 
 Hard-coded 5x2 LED block matrix with wiring:
-  Column 0: Blocks 0-4 (top to bottom)
-  Column 1: Blocks 5-9 (bottom to top, i.e., reverse wiring)
+  Right column: top to bottom
+  Left column: bottom to top
 """
 import numpy as np
 import cv2
@@ -80,11 +80,12 @@ def build_calibration_image():
 def get_wiring_order():
     """Return the wiring order for the 5x2 block matrix.
     
-    LED chain physically goes: Column 0 top→bottom, then Column 1 bottom→top.
-    In row-major block IDs: [0, 2, 4, 6, 8, 9, 7, 5, 3, 1]
+    LED chain physically starts at the top-right block, goes down the right
+    column, then snakes back up the left column.
+    In row-major block IDs: [1, 3, 5, 7, 9, 8, 6, 4, 2, 0]
     This maps physical block position to its position in the LED chain.
     """
-    return [0, 2, 4, 6, 8, 9, 7, 5, 3, 1]
+    return [1, 3, 5, 7, 9, 8, 6, 4, 2, 0]
 
 
 
