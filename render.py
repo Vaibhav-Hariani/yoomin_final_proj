@@ -36,12 +36,12 @@ def render(image_path: str, preview_path: str = "preview.png"):
     cv2.imwrite(preview_path, frame)
     print(f"Preview saved to {preview_path}  ({frame.shape[1]}×{frame.shape[0]})")
 
-    # Write to LEDs — convert BGR (OpenCV) → GRB (NeoPixel WS2812B)
+    # Write to LEDs — convert BGR (OpenCV) → RGB (neopixel library handles GRB internally)
     for y in range(Y_LEDS):
         for x in range(X_LEDS):
             led_index = int(led_map[y, x])
-            LEDS[led_index] = (int(frame[y, x, 1]),   # G
-                               int(frame[y, x, 2]),   # R
+            LEDS[led_index] = (int(frame[y, x, 2]),   # R
+                               int(frame[y, x, 1]),   # G
                                int(frame[y, x, 0]))   # B
     LEDS.show()
     print("Frame written to LEDs.")
