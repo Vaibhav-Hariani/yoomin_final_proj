@@ -72,8 +72,8 @@ def light_display_node(display_node: int):
     LEDS.fill((0, 0, 0))
     start = display_node * BLOCK_SIZE
     for i in range(BLOCK_SIZE):
-        # Linear ramp: 230 → 30 across the block
-        v = 230 - (i * 200 // BLOCK_SIZE)
+        # Linear ramp: 255 → 0 across the block
+        v = 255 - (i * 255 // BLOCK_SIZE)
         LEDS[start + i] = (v, v, v)  # GRB — equal channels = white/grey
     LEDS.show()
 
