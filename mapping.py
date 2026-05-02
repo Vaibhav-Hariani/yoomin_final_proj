@@ -55,9 +55,10 @@ def build_mapping(grid_order, block_orientation):
         block_row = block_id // BLOCK_COLS
         block_col = block_id % BLOCK_COLS
 
-        # local pixel indices for the block (serpentine: odd rows run right→left)
-        local = np.arange(block_size, dtype=int).reshape((BLOCK_HEIGHT, BLOCK_WIDTH))
-        local[1::2, :] = local[1::2, ::-1]
+        # Column-major serpentine: even cols bottom→top, odd cols top→bottom
+        local = np.arange(block_size, dtype=int).reshape((BLOCK_WIDTH, BLOCK_HEIGHT))
+        local[0::2, :] = local[0::2, ::-1]   # even cols: reverse so row 0 = top
+        local = local.T                        # → shape (BLOCK_HEIGHT, BLOCK_WIDTH)
 
         # orientation: 0 => normal, 180 => rotate 180 degrees
         orient = int(block_orientation[block_id])
