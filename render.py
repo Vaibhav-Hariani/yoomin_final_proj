@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 """Render an image onto the LED matrix using calibration_result.py.
 
-The physical display is portrait (40 wide × 64 tall). The LED map uses a
-transposed coordinate system (row=0..39 is horizontal, col=0..63 is vertical),
-so the image is resized to portrait then transposed before writing.
-
-LEDs expect BGR byte order, which matches OpenCV's native channel layout —
-no channel swapping is needed.
+The physical display is landscape (64 wide × 40 tall). The LED map uses
+standard coordinates (row=0..39 is vertical, col=0..63 is horizontal).
+OpenCV loads images as BGR; NeoPixels (WS2812B) expect GRB — channels
+are reordered on write.
 """
 
 import sys
@@ -21,8 +19,8 @@ except ImportError:
 from mapping import build_mapping
 from writer import LEDS
 
-Y_LEDS = 40   # 5 blocks × 8 rows  (horizontal axis on physical display)
-X_LEDS = 64   # 2 blocks × 32 cols (vertical axis on physical display)
+Y_LEDS = 40   # 5 blocks × 8 rows  — vertical (height)
+X_LEDS = 64   # 2 blocks × 32 cols — horizontal (width)
 
 
 def render(image_path: str, preview_path: str = "preview.png"):
@@ -32,23 +30,19 @@ def render(image_path: str, preview_path: str = "preview.png"):
     if img is None:
         raise FileNotFoundError(f"Could not load image: {image_path}")
 
-    # Resize to portrait (40 wide × 64 tall) — cv2.resize takes (width, height)
-    portrait = cv2.resize(img, (Y_LEDS, X_LEDS), interpolation=cv2.INTER_AREA)
+    # Resize to landscape (64 wide × 40 tall) — cv2.resize takes (width, height)
+    frame = cv2.resize(img, (X_LEDS, Y_LEDS), interpolation=cv2.INTER_AREA)
 
-    # Preview is the portrait image — exactly what the display shows
-    cv2.imwrite(preview_path, portrait)
-    print(f"Preview saved to {preview_path}  ({portrait.shape[1]}×{portrait.shape[0]})")
+    cv2.imwrite(preview_path, frame)
+    print(f"Preview saved to {preview_path}  ({frame.shape[1]}×{frame.shape[0]})")
 
-    # Transpose to (40, 64, 3) so frame[y, x] aligns with led_map[y, x]
-    frame = np.transpose(portrait, (1, 0, 2))
-
-    # Write to LEDs — frame is BGR (OpenCV), LEDs expect BGR: direct passthrough
+    # Write to LEDs — convert BGR (OpenCV) → GRB (NeoPixel WS2812B)
     for y in range(Y_LEDS):
         for x in range(X_LEDS):
             led_index = int(led_map[y, x])
-            LEDS[led_index] = (int(frame[y, x, 0]),   # B
-                               int(frame[y, x, 1]),   # G
-                               int(frame[y, x, 2]))   # R
+            LEDS[led_index] = (int(frame[y, x, 1]),   # G
+                               int(frame[y, x, 2]),   # R
+                               int(frame[y, x, 0]))   # B
     LEDS.show()
     print("Frame written to LEDs.")
 
