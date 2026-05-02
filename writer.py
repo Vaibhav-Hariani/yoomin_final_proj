@@ -1,7 +1,7 @@
 ## Accepts a video file: at every frame, takes the array, writes the RGB values to the neopixel strip using the mapping in mapping.pyif PI:
 
-X_LEDS = 96
-Y_LEDS = 32
+X_LEDS = 64
+Y_LEDS = 40
 
 import numpy as np
 from mapping import build_mapping
@@ -16,6 +16,7 @@ try:
 except ImportError:
     class MOCK_LEDS:
         def __init__(self, num_leds):
+            print("Using mockup LED class")
             self.leds = [(0, 0, 0)] * num_leds
             self.updated_LEDS = 0
 
@@ -57,8 +58,8 @@ def main(video_path: str, LED_MAP: np.ndarray):
     cap.release()
 
 if __name__ == "__main__":
-    default_order = list(range(12))
-    default_orient = [0] * 12
+    default_order = list(range(10))
+    default_orient = [0] * 10
     m = build_mapping(default_order, default_orient)
     LEDS.clear()  # Clear all LEDs at the start
     main("output.mp4", LED_MAP=m)
