@@ -58,24 +58,21 @@ def make_block_pattern(block_id):
     return block
 
 
-def build_calibration_image(mapping):
-    """Build a calibration image that matches exactly what will appear on LEDs.
+def build_calibration_image():
+    """Build a 5x2 block calibration image with distinct colors per block.
     
-    For each physical pixel position, look up its LED index in the mapping,
-    then color it based on which block of the LED chain it belongs to.
-    This ensures the saved image matches what the LEDs will display.
+    Each physical block position gets a unique color based on its row-major
+    block ID (0-9), independent of wiring order.
     """
     frame = np.zeros((Y_LEDS, X_LEDS, 3), dtype=np.uint8)
     
-    # For each pixel, determine its LED index and color it based on block in LED chain
-    for i in range(Y_LEDS):
-        for j in range(X_LEDS):
-            led_index = mapping[i, j]
-            # Which block in the LED chain? (each block is 256 LEDs)
-            chain_block = led_index // 256
-            pattern = make_block_pattern(chain_block)
-            # Use a single pixel from the pattern for this position
-            frame[i, j] = pattern[i % BLOCK_HEIGHT, j % BLOCK_WIDTH]
+    for block_id in range(BLOCK_ROWS * BLOCK_COLS):
+        block_row = block_id // BLOCK_COLS
+        block_col = block_id % BLOCK_COLS
+        r0 = block_row * BLOCK_HEIGHT
+        c0 = block_col * BLOCK_WIDTH
+        pattern = make_block_pattern(block_id)
+        frame[r0:r0 + BLOCK_HEIGHT, c0:c0 + BLOCK_WIDTH] = pattern
     
     return frame
 
@@ -83,37 +80,28 @@ def build_calibration_image(mapping):
 def get_wiring_order():
     """Return the wiring order for the 5x2 block matrix.
     
-    Maps physical position to block index:
-      Column 0: Block 0, 1, 2, 3, 4 (top to bottom)
-      Column 1: Block 9, 8, 7, 6, 5 (top to bottom in layout, but reverse wiring)
+    LED chain physically goes: Column 0 top→bottom, then Column 1 bottom→top.
+    In row-major block IDs: [0, 2, 4, 6, 8, 9, 7, 5, 3, 1]
+    This maps physical block position to its position in the LED chain.
     """
-    order = []
-    # Column 0: top to bottom (blocks 0-4)
-    for row in range(BLOCK_ROWS):
-        order.append(row)
-    # Column 1: bottom to top (blocks 9,8,7,6,5)
-    for row in range(BLOCK_ROWS):
-        order.append(9 - row)
-    return order
+    return [0, 2, 4, 6, 8, 9, 7, 5, 3, 1]
 
 
 
 def main():
     """Run calibration with hard-coded 5x2 block structure."""
-    # Hard-coded wiring order for 5x2 block matrix
-    order = get_wiring_order()
-    orient = [0] * (BLOCK_ROWS * BLOCK_COLS)
-    
-    # Build mapping first
-    mapping = build_mapping(order, orient)
-    
-    # Build the calibration image using the mapping so it matches what LEDs will display
-    img = build_calibration_image(mapping)
+    # Build the calibration image with simple row-major layout
+    img = build_calibration_image()
 
     # Save a visualization (convert RGB -> BGR for OpenCV)
     out_filename = 'calibration.png'
     cv2.imwrite(out_filename, img[:, :, ::-1])
     print(f"Saved calibration image to {out_filename}")
+
+    # Build mapping using hard-coded wiring order and orientations
+    order = get_wiring_order()
+    orient = [0] * (BLOCK_ROWS * BLOCK_COLS)
+    mapping = build_mapping(order, orient)
 
     # Use writer.write_frame to output to LEDs (or mock)
     print("Writing calibration frame to LEDs...")
