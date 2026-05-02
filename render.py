@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Render an image onto the LED matrix using calibration_result.py.
 
-Downsamples the source image to the LED grid (40×64), writes each pixel to
-the correct LED via the calibrated mapping, and saves a scaled-up preview PNG
-showing exactly what will appear on the board.
+The physical display is portrait (40 wide × 64 tall). The LED map uses a
+transposed coordinate system (row=0..39 is horizontal, col=0..63 is vertical),
+so the image is resized to portrait then transposed before writing.
 
 LEDs expect BGR byte order, which matches OpenCV's native channel layout —
 no channel swapping is needed.
@@ -21,9 +21,8 @@ except ImportError:
 from mapping import build_mapping
 from writer import LEDS
 
-Y_LEDS = 40   # 5 blocks × 8 rows
-X_LEDS = 64   # 2 blocks × 32 cols
-PREVIEW_SCALE = 8   # scale factor for the saved preview PNG
+Y_LEDS = 40   # 5 blocks × 8 rows  (horizontal axis on physical display)
+X_LEDS = 64   # 2 blocks × 32 cols (vertical axis on physical display)
 
 
 def render(image_path: str, preview_path: str = "preview.png"):
@@ -33,17 +32,15 @@ def render(image_path: str, preview_path: str = "preview.png"):
     if img is None:
         raise FileNotFoundError(f"Could not load image: {image_path}")
 
-    # Downsample to LED grid — INTER_AREA minimises aliasing when shrinking
-    frame = cv2.resize(img, (X_LEDS, Y_LEDS), interpolation=cv2.INTER_AREA)
+    # Resize to portrait (40 wide × 64 tall) — cv2.resize takes (width, height)
+    portrait = cv2.resize(img, (Y_LEDS, X_LEDS), interpolation=cv2.INTER_AREA)
 
-    # Save a scaled-up preview with nearest-neighbour to keep pixels sharp
-    preview = cv2.resize(
-        frame,
-        (X_LEDS * PREVIEW_SCALE, Y_LEDS * PREVIEW_SCALE),
-        interpolation=cv2.INTER_NEAREST,
-    )
-    cv2.imwrite(preview_path, preview)
-    print(f"Preview saved to {preview_path}  ({preview.shape[1]}×{preview.shape[0]})")
+    # Preview is the portrait image — exactly what the display shows
+    cv2.imwrite(preview_path, portrait)
+    print(f"Preview saved to {preview_path}  ({portrait.shape[1]}×{portrait.shape[0]})")
+
+    # Transpose to (40, 64, 3) so frame[y, x] aligns with led_map[y, x]
+    frame = np.transpose(portrait, (1, 0, 2))
 
     # Write to LEDs — frame is BGR (OpenCV), LEDs expect BGR: direct passthrough
     for y in range(Y_LEDS):

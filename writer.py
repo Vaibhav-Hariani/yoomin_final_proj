@@ -62,5 +62,5 @@ if __name__ == "__main__":
     default_order = list(range(10))
     default_orient = [0] * 10
     m = build_mapping(default_order, default_orient)
-    LEDS.clear()  # Clear all LEDs at the start
+    LEDS[:] = (0, 0, 0)  # Clear all LEDs at the start
     main("output.mp4", LED_MAP=m)
