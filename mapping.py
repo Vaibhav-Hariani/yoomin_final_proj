@@ -4,32 +4,32 @@ import numpy as np
 
 ## Pass in the order and orientation of each of the blocks in the grid
 def build_mapping(grid_order, block_orientation):
-    """Build a 32x96 mapping from pixel (row,col) to LED index.
+    """Build a 40x64 mapping from pixel (row,col) to LED index.
 
     Grid layout:
-      - The overall display is 32 rows x 96 columns.
-      - It is composed of 12 blocks arranged as 4 rows x 3 cols of blocks.
+      - The overall display is 40 rows x 64 columns.
+      - It is composed of 10 blocks arranged as 5 rows x 2 cols of blocks.
       - Each block is 8 rows x 32 cols (BLOCK_HEIGHT x BLOCK_WIDTH).
 
     Parameters
-    - grid_order: sequence of 12 integers in [0..11] specifying the block id
-      (position id in row-major: id = block_row*3 + block_col) in the wiring
+    - grid_order: sequence of 10 integers in [0..9] specifying the block id
+      (position id in row-major: id = block_row*2 + block_col) in the wiring
       order. The first element is the block that receives LED indices 0..255,
       the second receives 256..511, etc.
-    - block_orientation: sequence/array of length 12 where element at index b
+    - block_orientation: sequence/array of length 10 where element at index b
       is either 0 or 180. If 0: the block's local pixel order is normal
       (top-left -> left-to-right, then down). If 180: the block is rotated
       180 degrees (both axes flipped) before assigning indices.
 
     Returns
-    - mapping: numpy.ndarray shape (32,96) with dtype=int where mapping[r,c]
+    - mapping: numpy.ndarray shape (40,64) with dtype=int where mapping[r,c]
       is the LED index to write for pixel (r,c).
     """
     # Constants
     BLOCK_HEIGHT = 8
     BLOCK_WIDTH = 32
-    BLOCK_ROWS = 4
-    BLOCK_COLS = 3
+    BLOCK_ROWS = 5
+    BLOCK_COLS = 2
 
     num_blocks = BLOCK_ROWS * BLOCK_COLS
     block_size = BLOCK_HEIGHT * BLOCK_WIDTH
@@ -80,8 +80,8 @@ def build_mapping(grid_order, block_orientation):
 if __name__ == '__main__':
     # Small self-test / example
     # Default wiring: blocks wired in row-major order, all orientations 0
-    default_order = list(range(12))
-    default_orient = [0] * 12
+    default_order = list(range(10))
+    default_orient = [0] * 10
     m = build_mapping(default_order, default_orient)
     print("mapping shape:", m.shape)
     # Print a small sample: top-left 8x16
