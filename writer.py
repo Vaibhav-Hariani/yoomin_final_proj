@@ -6,11 +6,9 @@ Y_LEDS = 40
 import numpy as np
 from mapping import build_mapping
 import cv2
-
 try:
     import board
     import neopixel
-
     LEDS = neopixel.NeoPixel(
         board.D18, X_LEDS * Y_LEDS, brightness=0.1, auto_write=False)
 except ImportError:
