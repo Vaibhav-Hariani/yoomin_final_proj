@@ -55,8 +55,9 @@ def build_mapping(grid_order, block_orientation):
         block_row = block_id // BLOCK_COLS
         block_col = block_id % BLOCK_COLS
 
-        # local pixel indices for the block (row-major left->right, top->bottom)
+        # local pixel indices for the block (serpentine: odd rows run right→left)
         local = np.arange(block_size, dtype=int).reshape((BLOCK_HEIGHT, BLOCK_WIDTH))
+        local[1::2, :] = local[1::2, ::-1]
 
         # orientation: 0 => normal, 180 => rotate 180 degrees
         orient = int(block_orientation[block_id])
