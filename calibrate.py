@@ -61,16 +61,20 @@ def build_calibration_image() -> np.ndarray:
 
 # ── Direct LED control (no mapping) ─────────────────────────────────────────
 
-def light_display_node(display_node: int, color: tuple = (200, 200, 200)):
+def light_display_node(display_node: int):
     """Light only the LEDs in the given display node (chain position 0–9).
 
-    color is in GRB byte order (NeoPixel native). Default is near-white.
-    All other LEDs are cleared.
+    Renders a brightness gradient along the LED chain: the first LED in the
+    segment is brightest (white), the last is dim. This makes orientation
+    visually clear — the bright corner is chain index 0 within the block
+    (top-left at 0°, bottom-right at 180°).
     """
     LEDS.fill((0, 0, 0))
     start = display_node * BLOCK_SIZE
-    for i in range(start, start + BLOCK_SIZE):
-        LEDS[i] = color
+    for i in range(BLOCK_SIZE):
+        # Linear ramp: 230 → 30 across the block
+        v = 230 - (i * 200 // BLOCK_SIZE)
+        LEDS[start + i] = (v, v, v)  # GRB — equal channels = white/grey
     LEDS.show()
 
 
@@ -121,14 +125,14 @@ class CalibrationSession:
         grid_order = [self._map[d][0] for d in range(NUM_BLOCKS)]
         # block_orientation indexed by image_node (as mapping.py expects)
         block_orientation = [0] * NUM_BLOCKS
-        for d, (img, orient) in self._map.items():
+        for _, (img, orient) in self._map.items():
             block_orientation[img] = orient
         return build_mapping(grid_order, block_orientation)
 
     def to_dict(self) -> dict:
         grid_order = [self._map[d][0] for d in range(NUM_BLOCKS)]
         block_orientation = [0] * NUM_BLOCKS
-        for d, (img, orient) in self._map.items():
+        for _, (img, orient) in self._map.items():
             block_orientation[img] = orient
         return {"grid_order": grid_order, "block_orientation": block_orientation}
 
@@ -153,9 +157,13 @@ def run_interactive(session=None) -> CalibrationSession:
     print("Image node grid (row-major):")
     print(_GRID_DIAGRAM)
     print()
+    print("Each block shows a gradient: bright corner = chain start (LED 0 of that segment).")
+    print("  0°  → bright corner is top-left")
+    print("  180° → bright corner is bottom-right")
+    print()
     print("For each lit display node, enter:  <image_node> <orientation>")
     print("  image_node  — which grid position lit up (0–9)")
-    print("  orientation — 0 (normal) or 180 (rotated 180°)  [default: 0]")
+    print("  orientation — 0 or 180  [default: 0]")
     print()
 
     for display_node in session.pending_display_nodes():
