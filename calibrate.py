@@ -58,30 +58,24 @@ def make_block_pattern(block_id):
     return block
 
 
-def build_calibration_image():
-    """Build a 5x2 block calibration image with distinct colors per block.
+def build_calibration_image(mapping):
+    """Build a calibration image that matches exactly what will appear on LEDs.
     
-    Wiring order:
-      Column 0: Blocks 0-4 (top to bottom)
-      Column 1: Blocks 5-9 (bottom to top, reversed)
+    For each physical pixel position, look up its LED index in the mapping,
+    then color it based on which block of the LED chain it belongs to.
+    This ensures the saved image matches what the LEDs will display.
     """
     frame = np.zeros((Y_LEDS, X_LEDS, 3), dtype=np.uint8)
     
-    # Column 0: Blocks 0-4 (top to bottom)
-    for row in range(BLOCK_ROWS):
-        block_id = row
-        r0 = row * BLOCK_HEIGHT
-        c0 = 0
-        pattern = make_block_pattern(block_id)
-        frame[r0:r0 + BLOCK_HEIGHT, c0:c0 + BLOCK_WIDTH] = pattern
-    
-    # Column 1: Blocks 5-9 (bottom to top, i.e., reverse wiring)
-    for row in range(BLOCK_ROWS):
-        block_id = 9 - row  # Column 1: Block 9, 8, 7, 6, 5 (top to bottom in physical layout)
-        r0 = row * BLOCK_HEIGHT
-        c0 = BLOCK_WIDTH
-        pattern = make_block_pattern(block_id)
-        frame[r0:r0 + BLOCK_HEIGHT, c0:c0 + BLOCK_WIDTH] = pattern
+    # For each pixel, determine its LED index and color it based on block in LED chain
+    for i in range(Y_LEDS):
+        for j in range(X_LEDS):
+            led_index = mapping[i, j]
+            # Which block in the LED chain? (each block is 256 LEDs)
+            chain_block = led_index // 256
+            pattern = make_block_pattern(chain_block)
+            # Use a single pixel from the pattern for this position
+            frame[i, j] = pattern[i % BLOCK_HEIGHT, j % BLOCK_WIDTH]
     
     return frame
 
@@ -110,16 +104,16 @@ def main():
     order = get_wiring_order()
     orient = [0] * (BLOCK_ROWS * BLOCK_COLS)
     
-    # Build the image that labels/marks each block position
-    img = build_calibration_image()
+    # Build mapping first
+    mapping = build_mapping(order, orient)
+    
+    # Build the calibration image using the mapping so it matches what LEDs will display
+    img = build_calibration_image(mapping)
 
     # Save a visualization (convert RGB -> BGR for OpenCV)
     out_filename = 'calibration.png'
     cv2.imwrite(out_filename, img[:, :, ::-1])
     print(f"Saved calibration image to {out_filename}")
-
-    # Build mapping using hard-coded wiring order and orientations
-    mapping = build_mapping(order, orient)
 
     # Use writer.write_frame to output to LEDs (or mock)
     print("Writing calibration frame to LEDs...")

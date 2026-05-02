@@ -44,8 +44,9 @@ def write_frame(frame: np.ndarray, LED_MAP: np.ndarray):
     for i in range(Y_LEDS):
         for j in range(X_LEDS):
             led_index = LED_MAP[i][j]
+            # NeoPixel (WS2812B) expects GRB order, not RGB
             r, g, b = frame[i, j]
-            LEDS[led_index] = (int(r), int(g), int(b))
+            LEDS[led_index] = (int(g), int(r), int(b))
     LEDS.show()
 
 def main(video_path: str, LED_MAP: np.ndarray):
