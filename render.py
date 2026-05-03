@@ -82,7 +82,7 @@ def render_video(LEDS, video_path: str, mapping: np.ndarray, max_frames = None, 
         raise FileNotFoundError(f"Could not open video: {video_path}")
 
     fps = cap.get(cv2.CAP_PROP_FPS)
-    frame_delay = 1.0 / fps if fps and fps > 0 else 0.0
+    frame_delay = 1.0 / (5 * fps) if fps and fps > 0 else 0.0
     frame_count = 0
 
     try:
