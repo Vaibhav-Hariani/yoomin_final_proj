@@ -80,34 +80,61 @@ def render_video(LEDS, video_path: str, mapping: np.ndarray, max_frames = None, 
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         raise FileNotFoundError(f"Could not open video: {video_path}")
-
     fps = cap.get(cv2.CAP_PROP_FPS)
-    frame_delay = 1.0 / (5 * fps) if fps and fps > 0 else 0.0
+    if not fps or fps <= 0:
+        fps = 30.0
+    frame_interval = 1.0 / fps
+
+    total_frames_in_video = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+
+    start_time = time.monotonic()
     frame_count = 0
+    last_rendered_frame = -1
+    total_skipped = 0
 
     try:
         while True:
             if max_frames is not None and frame_count >= max_frames:
                 break
 
-            ok, frame = cap.read()
-            if not ok:
+            # determine which frame corresponds to the elapsed time since start
+            elapsed = time.monotonic() - start_time
+            desired_frame = int(round(elapsed * fps))
+            if desired_frame < 0:
+                desired_frame = 0
+
+            if total_frames_in_video and desired_frame >= total_frames_in_video:
                 break
 
-            started = time.monotonic()
+            # seek to the closest frame for this moment in time
+            cap.set(cv2.CAP_PROP_POS_FRAMES, desired_frame)
+            ok, frame = cap.read()
+            if not ok or frame is None:
+                break
+
             frame = cv2.resize(frame, (X_LEDS, Y_LEDS))
             frame = frame // div
             render(frame, mapping, LEDS, brightness=brightness)
+
+            # how many frames were skipped (not rendered) to reach desired_frame
+            skipped = max(0, desired_frame - (last_rendered_frame + 1))
+            if skipped > 0:
+                print(f"Jumped {skipped} frame(s) to frame {desired_frame}.")
+            total_skipped += skipped
+
+            last_rendered_frame = desired_frame
             frame_count += 1
 
-            if frame_delay:
-                elapsed = time.monotonic() - started
-                if elapsed < frame_delay:
-                    time.sleep(frame_delay - elapsed)
+            # small sleep to avoid busy-looping; next iteration will pick the
+            # closest frame for the new elapsed time.
+            next_target = start_time + ((desired_frame + 0.5) * frame_interval)
+            sleep_time = next_target - time.monotonic()
+            if sleep_time > 0:
+                time.sleep(min(sleep_time, 0.05))
     finally:
         cap.release()
 
-    print(f"Rendered {frame_count} frame(s) from {video_path}.")
+    print(f"Rendered {frame_count} frame(s) from {video_path}. Total skipped frames: {total_skipped}.")
 
 
 def main(argv: list[str] | None = None):
