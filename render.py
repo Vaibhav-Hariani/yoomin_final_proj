@@ -18,21 +18,48 @@ except ImportError:
     raise SystemExit("calibration_result.py not found — run calibrate.py first")
 
 from mapping import build_mapping
-from writer import LEDS
+import numpy as np
+
+X_LEDS = 64
+Y_LEDS = 40
+
+import cv2
+try:
+    import board
+    import neopixel
+
+except ImportError:
+    print("Warning: board and neopixel libraries not found. Using mockup LED class.")
+    class MOCK_LEDS:
+        def __init__(self, num_leds):
+            print("Using mockup LED class")
+            self.leds = [(0, 0, 0)] * num_leds
+            self.updated_LEDS = 0
+
+        def __setitem__(self, index, color):
+            if 0 <= index < len(self.leds):
+                self.leds[index] = color
+                self.updated_LEDS += 1
+
+        def fill(self, color):
+            self.leds = [color] * len(self.leds)
+
+        def show(self):
+            print(f" {self.updated_LEDS} LEDS Have been Updated!")
+            self.updated_LEDS = 0
+            # print("LED colors updated (simulation):")
+        def clear(self):
+            pass
 
 Y_LEDS = 40   # 5 blocks × 8 rows  — vertical (height)
 X_LEDS = 64   # 2 blocks × 32 cols — horizontal (width)
 
-
-def render(frame: np.ndarray, mapping: np.ndarray):
+def render(frame: np.ndarray, mapping: np.ndarray, LEDS):
     """Render one BGR frame through the provided pixel-to-LED mapping."""
     if frame is None:
         raise ValueError("frame must not be None")
     if mapping.shape != (Y_LEDS, X_LEDS):
         raise ValueError(f"mapping must have shape {(Y_LEDS, X_LEDS)}, got {mapping.shape}")
-
-    frame = cv2.resize(frame, (X_LEDS, Y_LEDS))
-    frame = frame // 10
 
     # Write to LEDs: convert BGR (OpenCV) -> RGB for this render path.
     for y in range(Y_LEDS):
@@ -49,7 +76,7 @@ def render(frame: np.ndarray, mapping: np.ndarray):
     LEDS.show()
 
 
-def render_video(video_path: str, mapping: np.ndarray, *, max_frames: int | None = None):
+def render_video(LEDS, video_path: str, mapping: np.ndarray, max_frames = None, div=5 ):
     """Decode a video and render it to the LEDs frame by frame."""
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
@@ -69,7 +96,9 @@ def render_video(video_path: str, mapping: np.ndarray, *, max_frames: int | None
                 break
 
             started = time.monotonic()
-            render(frame, mapping)
+            frame = cv2.resize(frame, (X_LEDS, Y_LEDS))
+            frame = frame // div
+            render(frame, mapping, LEDS)
             frame_count += 1
 
             if frame_delay:
@@ -86,10 +115,18 @@ def main(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(description="Render a video onto the LED matrix.")
     parser.add_argument("video_path", nargs="?", default="output.mp4")
     parser.add_argument("--max-frames", type=int, default=None)
+    parser.add_argument("--brightness", type=int, default=0.25)
+    parser.add_argument("--div", type=int, default=5)
+
     args = parser.parse_args(argv)
+    try:
+        LEDS = neopixel.NeoPixel(
+            board.D18, X_LEDS * Y_LEDS, brightness=args.brightness, auto_write=False)
+    except:
+        LEDS = MOCK_LEDS(X_LEDS * Y_LEDS)
 
     mapping = build_mapping(GRID_ORDER, BLOCK_ORIENTATION)
-    render_video(args.video_path, mapping, max_frames=args.max_frames)
+    render_video(LEDS, args.video_path, mapping, max_frames=args.max_frames, div = args.div)
 
 
 if __name__ == "__main__":
