@@ -115,7 +115,7 @@ def main(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(description="Render a video onto the LED matrix.")
     parser.add_argument("video_path", nargs="?", default="output.mp4")
     parser.add_argument("--max-frames", type=int, default=None)
-    parser.add_argument("--brightness", type=int, default=0.25)
+    parser.add_argument("--brightness", type=float, default=0.25)
     parser.add_argument("--div", type=int, default=5)
 
     args = parser.parse_args(argv)
