@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""Render an image onto the LED matrix using calibration_result.py.
+"""Render video frames onto the LED matrix using calibration_result.py.
 
 The physical display is landscape (64 wide × 40 tall). The LED map uses
 standard coordinates (row=0..39 is vertical, col=0..63 is horizontal).
-OpenCV loads images as BGR; NeoPixels are written directly below.
+OpenCV decodes video frames as BGR; NeoPixels are written directly below.
 """
 
+import argparse
 import sys
+import time
 import cv2
 import numpy as np
 
@@ -21,79 +23,74 @@ from writer import LEDS
 Y_LEDS = 40   # 5 blocks × 8 rows  — vertical (height)
 X_LEDS = 64   # 2 blocks × 32 cols — horizontal (width)
 
-EDGE_CONTRAST_STRENGTH = 0.55
-EDGE_DARK_DETAIL_STRENGTH = 0.85
-EDGE_BLUR_SIGMA = 2.0
-EDGE_DILATE_KERNEL = 5
 
+def render(frame: np.ndarray, mapping: np.ndarray):
+    """Render one BGR frame through the provided pixel-to-LED mapping."""
+    if frame is None:
+        raise ValueError("frame must not be None")
+    if mapping.shape != (Y_LEDS, X_LEDS):
+        raise ValueError(f"mapping must have shape {(Y_LEDS, X_LEDS)}, got {mapping.shape}")
 
-def resize_for_leds(img: np.ndarray) -> np.ndarray:
-    """Resize to LED resolution while preserving source-image edge detail."""
-    frame = cv2.resize(img, (X_LEDS, Y_LEDS), interpolation=cv2.INTER_AREA)
+    frame = cv2.resize(frame, (X_LEDS, Y_LEDS))
+    frame = frame // 10
 
-    luma = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY).astype(np.float32)
-    smooth_luma = cv2.GaussianBlur(luma, (0, 0), sigmaX=EDGE_BLUR_SIGMA)
-
-    grad_x = cv2.Sobel(luma, cv2.CV_32F, 1, 0, ksize=3)
-    grad_y = cv2.Sobel(luma, cv2.CV_32F, 0, 1, ksize=3)
-    edge = cv2.magnitude(grad_x, grad_y)
-    edge = cv2.normalize(edge, None, 0.0, 1.0, cv2.NORM_MINMAX)
-
-    kernel = np.ones((EDGE_DILATE_KERNEL, EDGE_DILATE_KERNEL), dtype=np.uint8)
-    edge = cv2.dilate(edge, kernel)
-
-    dark_detail = np.maximum(smooth_luma - luma, 0.0) * edge
-    dark_detail = cv2.resize(
-        dark_detail,
-        (X_LEDS, Y_LEDS),
-        interpolation=cv2.INTER_AREA,
-    )
-    edge_mask = cv2.resize(
-        edge,
-        (X_LEDS, Y_LEDS),
-        interpolation=cv2.INTER_AREA,
-    )
-    edge_mask = np.clip(edge_mask, 0.0, 1.0)
-
-    frame_f = frame.astype(np.float32)
-    local_mean = cv2.GaussianBlur(frame_f, (0, 0), sigmaX=0.8)
-    frame_f += (frame_f - local_mean) * edge_mask[:, :, None] * EDGE_CONTRAST_STRENGTH
-
-    frame_luma = cv2.cvtColor(np.clip(frame_f, 0, 255).astype(np.uint8), cv2.COLOR_BGR2GRAY)
-    frame_luma = frame_luma.astype(np.float32)
-    target_luma = np.maximum(
-        0.0,
-        frame_luma - dark_detail * EDGE_DARK_DETAIL_STRENGTH,
-    )
-    scale = target_luma / np.maximum(frame_luma, 1.0)
-    frame_f *= scale[:, :, None]
-    return np.clip(frame_f, 0, 255).astype(np.uint8)
-
-
-def render(image_path: str, preview_path: str = "preview.png"):
-    led_map = build_mapping(GRID_ORDER, BLOCK_ORIENTATION)
-
-    img = cv2.imread(image_path)   # BGR
-    if img is None:
-        raise FileNotFoundError(f"Could not load image: {image_path}")
-
-    # Resize to landscape (64 wide × 40 tall) — cv2.resize takes (width, height)
-    frame = resize_for_leds(img)
-
-    cv2.imwrite(preview_path, frame)
-    print(f"Preview saved to {preview_path}  ({frame.shape[1]}×{frame.shape[0]})")
-
-    # Write to LEDs — convert BGR (OpenCV) → RGB for this render path.
+    # Write to LEDs: convert BGR (OpenCV) -> RGB for this render path.
     for y in range(Y_LEDS):
         for x in range(X_LEDS):
-            led_index = int(led_map[y, x])
+            led_index = int(mapping[y, x])
+            # R = int(frame[y, x, 2])
+            # G = int(frame[y, x, 1])
+            # B = int(frame[y, x, 0])
+            # if R < 50 and G < 50 and B < 50:
+            #     print(f"Dark pixel found at ({x}, {y}): R={R}, G={G}, B={B}")
             LEDS[led_index] = (int(frame[y, x, 2]),   # R
                                int(frame[y, x, 1]),   # G
                                int(frame[y, x, 0]))   # B
     LEDS.show()
-    print("Frame written to LEDs.")
+
+
+def render_video(video_path: str, mapping: np.ndarray, *, max_frames: int | None = None):
+    """Decode a video and render it to the LEDs frame by frame."""
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        raise FileNotFoundError(f"Could not open video: {video_path}")
+
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    frame_delay = 1.0 / fps if fps and fps > 0 else 0.0
+    frame_count = 0
+
+    try:
+        while True:
+            if max_frames is not None and frame_count >= max_frames:
+                break
+
+            ok, frame = cap.read()
+            if not ok:
+                break
+
+            started = time.monotonic()
+            render(frame, mapping)
+            frame_count += 1
+
+            if frame_delay:
+                elapsed = time.monotonic() - started
+                if elapsed < frame_delay:
+                    time.sleep(frame_delay - elapsed)
+    finally:
+        cap.release()
+
+    print(f"Rendered {frame_count} frame(s) from {video_path}.")
+
+
+def main(argv: list[str] | None = None):
+    parser = argparse.ArgumentParser(description="Render a video onto the LED matrix.")
+    parser.add_argument("video_path", nargs="?", default="output.mp4")
+    parser.add_argument("--max-frames", type=int, default=None)
+    args = parser.parse_args(argv)
+
+    mapping = build_mapping(GRID_ORDER, BLOCK_ORIENTATION)
+    render_video(args.video_path, mapping, max_frames=args.max_frames)
 
 
 if __name__ == "__main__":
-    image_path = sys.argv[1] if len(sys.argv) > 1 else "image_test.jpeg"
-    render(image_path)
+    main(sys.argv[1:])
