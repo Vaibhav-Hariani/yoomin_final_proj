@@ -1,0 +1,16 @@
+[Unit]
+Description=YooMin LED Renderer
+After=network.target
+
+[Service]
+Type=simple
+# Replace /path/to/venv with your virtualenv path on the Raspberry Pi.
+# This service sources the venv and runs render.py from the project directory.
+User=root
+WorkingDirectory=/home/yoomin/Documents/yoomin_final_proj
+ExecStart=/bin/bash -lc 'source .venv/bin/python && exec python Yoo_Min_Art/render.py'
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

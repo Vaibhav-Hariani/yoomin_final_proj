@@ -31,10 +31,11 @@ try:
 except ImportError:
     print("Warning: board and neopixel libraries not found. Using mockup LED class.")
     class MOCK_LEDS:
-        def __init__(self, num_leds):
+        def __init__(self, num_leds, brightness=1.0):
             print("Using mockup LED class")
             self.leds = [(0, 0, 0)] * num_leds
             self.updated_LEDS = 0
+            self.brightness = brightness
 
         def __setitem__(self, index, color):
             if 0 <= index < len(self.leds):
@@ -54,7 +55,7 @@ except ImportError:
 Y_LEDS = 40   # 5 blocks × 8 rows  — vertical (height)
 X_LEDS = 64   # 2 blocks × 32 cols — horizontal (width)
 
-def render(frame: np.ndarray, mapping: np.ndarray, LEDS):
+def render(frame: np.ndarray, mapping: np.ndarray, LEDS, brightness: float = 1.0):
     """Render one BGR frame through the provided pixel-to-LED mapping."""
     if frame is None:
         raise ValueError("frame must not be None")
@@ -62,21 +63,19 @@ def render(frame: np.ndarray, mapping: np.ndarray, LEDS):
         raise ValueError(f"mapping must have shape {(Y_LEDS, X_LEDS)}, got {mapping.shape}")
 
     # Write to LEDs: convert BGR (OpenCV) -> RGB for this render path.
+    # Apply brightness scaling manually so MOCK_LEDS and real NeoPixel behave the same
+    b = float(brightness)
     for y in range(Y_LEDS):
         for x in range(X_LEDS):
             led_index = int(mapping[y, x])
-            # R = int(frame[y, x, 2])
-            # G = int(frame[y, x, 1])
-            # B = int(frame[y, x, 0])
-            # if R < 50 and G < 50 and B < 50:
-            #     print(f"Dark pixel found at ({x}, {y}): R={R}, G={G}, B={B}")
-            LEDS[led_index] = (int(frame[y, x, 2]),   # R
-                               int(frame[y, x, 1]),   # G
-                               int(frame[y, x, 0]))   # B
+            r = int(np.clip(frame[y, x, 2] * b, 0, 255))
+            g = int(np.clip(frame[y, x, 1] * b, 0, 255))
+            bl = int(np.clip(frame[y, x, 0] * b, 0, 255))
+            LEDS[led_index] = (r, g, bl)
     LEDS.show()
 
 
-def render_video(LEDS, video_path: str, mapping: np.ndarray, max_frames = None, div=5 ):
+def render_video(LEDS, video_path: str, mapping: np.ndarray, max_frames = None, div=5, brightness: float = 1.0 ):
     """Decode a video and render it to the LEDs frame by frame."""
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
@@ -98,7 +97,7 @@ def render_video(LEDS, video_path: str, mapping: np.ndarray, max_frames = None, 
             started = time.monotonic()
             frame = cv2.resize(frame, (X_LEDS, Y_LEDS))
             frame = frame // div
-            render(frame, mapping, LEDS)
+            render(frame, mapping, LEDS, brightness=brightness)
             frame_count += 1
 
             if frame_delay:
@@ -115,19 +114,22 @@ def main(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(description="Render a video onto the LED matrix.")
     parser.add_argument("video_path", nargs="?", default="output.mp4")
     parser.add_argument("--max-frames", type=int, default=None)
-    parser.add_argument("--brightness", type=float, default=0.25)
+    parser.add_argument("--brightness", type=float, default=1)
     parser.add_argument("--div", type=int, default=5)
 
     args = parser.parse_args(argv)
     try:
+        # We will apply brightness scaling manually in `render`, so create the
+        # real NeoPixel object with full brightness here to avoid double-scaling.
         LEDS = neopixel.NeoPixel(
-            board.D18, X_LEDS * Y_LEDS, brightness=args.brightness, auto_write=False)
+            board.D18, X_LEDS * Y_LEDS, brightness=1.0, auto_write=False)
     except:
-        LEDS = MOCK_LEDS(X_LEDS * Y_LEDS)
+        LEDS = MOCK_LEDS(X_LEDS * Y_LEDS, brightness=args.brightness)
 
     mapping = build_mapping(GRID_ORDER, BLOCK_ORIENTATION)
-    render_video(LEDS, args.video_path, mapping, max_frames=args.max_frames, div = args.div)
+    render_video(LEDS, args.video_path, mapping, max_frames=args.max_frames, div = args.div, brightness=args.brightness)
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    while True:
+        main(sys.argv[1:])
